@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request: {}
+
+env:
+  COLUMNS: 150
+  UV_FROZEN: true
+  FORCE_COLOR: 1
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: 3.12
+          enable-cache: false
+
+      - name: Install dependencies
+        run: uv sync --all-packages
+      - uses: j178/prek-action@v1
+
+  test:
+    name: Test ${{ matrix.os }} / ${{ matrix.python-version }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+        # python-version: ['3.12', '3.13', '3.14']
+        # include:
+        #   # test macos intel just with latest python version
+        #   - os: macos-15-intel
+        #     python-version: '3.14'
+        #   - os: macos-15-intel
+        #     python-version: '3.14t'
+
+    env:
+      OS: ${{ matrix.os }}
+      DEPS: yes
+      UV_PYTHON_PREFERENCE: only-managed
+      # there's some issue with TZ being /UTC in the runner, so we set it to UTC here
+      # see https://github.com/python-babel/babel/issues/990#issuecomment-1762142879
+      TZ: UTC
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+      - name: Install dependencies
+        # not using --all-extras as graphiti is "part of" this repository, but its extra will pull in deps like torch runtime
+        run: uv sync --all-packages
+      - name: coverage run
+        run: uv run coverage run -m pytest --durations=10
+        env:
+          COVERAGE_FILE: .coverage.${{ runner.os }}-py${{ matrix.python }}-without-dotenv
+          CONTEXT: ${{ runner.os }}-py${{ matrix.python }}-without-dotenv
+
+      - run: |
+          uv run coverage combine
+          uv run coverage xml
+
+      - uses: codecov/codecov-action@v4.5.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          env_vars: PYTHON,OS
+
+      - name: Store coverage files
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
+          path: coverage
+          include-hidden-files: true
+
+  # coverage-combine:
+  #   needs: [test]
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #       with:
+  #         persist-credentials: false
+
+  #     - uses: actions/setup-python@v6
+  #       with:
+  #         python-version: "3.12"
+
+  #     - name: Get coverage files
+  #       uses: actions/download-artifact@v6
+  #       with:
+  #         merge-multiple: true
+  #         pattern: coverage-*
+  #         path: coverage
+
+  #     - run: pip install coverage[toml]
+
+  #     - run: ls -la coverage
+  #     - run: coverage combine coverage
+  #     - run: coverage report
+  #     - run: coverage html --show-contexts --title "coverage for ${{ github.sha }}"
+
+  #     - name: Store coverage data
+  #       uses: actions/upload-artifact@v5
+  #       with:
+  #         name: coverage-data
+  #         path: .coverage
+  #         include-hidden-files: true
+
+  #     - name: Store coverage HTML
+  #       uses: actions/upload-artifact@v5
+  #       with:
+  #         name: coverage-html
+  #         path: htmlcov
+
+  coverage-pr-comment:
+    needs: coverage-combine
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v6
+        with:
+          name: coverage-data
+
+      - name: Generate coverage comment
+        id: coverage-comment
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Store coverage comment
+        uses: actions/upload-artifact@v5
+        if: steps.coverage-comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt
+
+  release:
+    name: Release
+    needs: [lint, test]
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      - name: install
+        run: pip install -U build
+
+      - name: build
+        run: python -m build
+
+      - name: Upload package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
