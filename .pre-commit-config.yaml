@@ -90,7 +90,7 @@ repos:
     rev: 0.9.9
     hooks:
       - id: uv-sync
-        args: ["--group", "typecheck-lite", "--group", "typecheck-all"]
+        args: []
         stages: [] # make this hook runs in all stages
   - repo: local
     hooks:
