@@ -20,7 +20,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -60,7 +60,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
@@ -80,14 +80,14 @@ jobs:
           uv run coverage combine
           uv run coverage xml
 
-      - uses: codecov/codecov-action@v5.5.1
+      - uses: codecov/codecov-action@v5.5.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
           env_vars: PYTHON,OS
 
       - name: Store coverage files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
           path: coverage
@@ -98,7 +98,7 @@ jobs:
   #   runs-on: ubuntu-latest
 
   #   steps:
-  #     - uses: actions/checkout@v5
+  #     - uses: actions/checkout@v6
   #       with:
   #         persist-credentials: false
 
@@ -107,7 +107,7 @@ jobs:
   #         python-version: "3.12"
 
   #     - name: Get coverage files
-  #       uses: actions/download-artifact@v6
+  #       uses: actions/download-artifact@v7
   #       with:
   #         merge-multiple: true
   #         pattern: coverage-*
@@ -121,14 +121,14 @@ jobs:
   #     - run: coverage html --show-contexts --title "coverage for ${{ github.sha }}"
 
   #     - name: Store coverage data
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: coverage-data
   #         path: .coverage
   #         include-hidden-files: true
 
   #     - name: Store coverage HTML
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: coverage-html
   #         path: htmlcov
@@ -142,12 +142,12 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Download coverage data
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: coverage-data
 
@@ -158,7 +158,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Store coverage comment
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: steps.coverage-comment.outputs.COMMENT_FILE_WRITTEN == 'true'
         with:
           name: python-coverage-comment-action
@@ -174,7 +174,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: set up python
         uses: actions/setup-python@v6
